@@ -1,0 +1,505 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Zeitdauer-Trainer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: eine Aufgabe als Tabellenzeile Zeitpunkt - Zeitdauer - Zeitpunkt, darunter ein einziger Hauptknopf; bei einem Fehler erscheint die Lösung darunter. */
+:root {
+  --bg: #edf2f5;
+  --surface: #ffffff;
+  --ink: #15222b;
+  --muted: #4d5f6b;
+  --line: #c3d0d8;
+  --rule: #15222b;
+  --head: #e1eaef;
+  --accent: #1c5cb8;
+  --accent-ink: #ffffff;
+  --lcd: #1b2a35;
+  --lcd-ink: #c4f3d2;
+  --ok: #17743a;
+  --ok-bg: #dff3e5;
+  --bad: #a82f1a;
+  --bad-bg: #fbe5df;
+  --field: #ffffff;
+  --focus: #e09b00;
+  --font: Arial, Helvetica, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e161c; --surface: #16212a; --ink: #e8eff3; --muted: #9bb0bc; --line: #2d3e4a;
+    --rule: #7f95a3; --head: #1f2d37; --accent: #6fa8ff; --accent-ink: #09182b;
+    --lcd: #0a1116; --lcd-ink: #b9f4cb; --ok: #76d893; --ok-bg: #15301f;
+    --bad: #ff9f8b; --bad-bg: #3b1b15; --field: #0f1a21; --focus: #ffc233;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e161c; --surface: #16212a; --ink: #e8eff3; --muted: #9bb0bc; --line: #2d3e4a;
+  --rule: #7f95a3; --head: #1f2d37; --accent: #6fa8ff; --accent-ink: #09182b;
+  --lcd: #0a1116; --lcd-ink: #b9f4cb; --ok: #76d893; --ok-bg: #15301f;
+  --bad: #ff9f8b; --bad-bg: #3b1b15; --field: #0f1a21; --focus: #ffc233;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 20px;
+  line-height: 1.4;
+  padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.app { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; }
+h1 { margin: 0; font-size: 34px; line-height: 1.1; }
+.modes { display: flex; flex-wrap: wrap; gap: 8px; }
+.modes button {
+  font: 700 18px var(--font);
+  min-height: 48px; padding: 0 18px;
+  border-radius: 12px; border: 2px solid var(--line);
+  background: var(--surface); color: var(--ink); cursor: pointer;
+}
+.modes button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.modes button:focus-visible, .big:focus-visible { outline: 4px solid var(--focus); outline-offset: 3px; }
+
+.progress { display: flex; flex-wrap: wrap; gap: 8px; }
+.dot {
+  width: 38px; height: 38px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-weight: 700; font-size: 17px;
+  border: 2px solid var(--line); background: var(--surface); color: var(--muted);
+}
+.dot.cur { border: 3px solid var(--accent); color: var(--accent); }
+.dot.ok { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+.dot.bad { background: var(--bad-bg); border-color: var(--bad); color: var(--bad); }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+  padding: 24px; display: flex; flex-direction: column; gap: 20px;
+}
+.count { margin: 0; color: var(--muted); font-weight: 700; font-size: 17px; letter-spacing: 0.06em; text-transform: uppercase; }
+.prompt { margin: 0; font-size: 28px; font-weight: 700; line-height: 1.2; }
+
+.table {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 2px solid var(--rule); border-radius: 14px; overflow: hidden;
+}
+.colhead { padding: 12px 16px; font-weight: 700; font-size: 22px; background: var(--head); border-bottom: 2px solid var(--rule); }
+.colhead + .colhead, .cell + .cell { border-left: 2px solid var(--rule); }
+.cell { padding: 30px 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-width: 0; }
+.lab { display: none; font-weight: 700; color: var(--muted); font-size: 18px; align-self: center; }
+
+.arrow { position: relative; align-self: stretch; height: 3px; margin-right: 18px; background: var(--ink); }
+.arrow::after {
+  content: ""; position: absolute; left: 100%; top: 50%; transform: translateY(-50%);
+  border-left: 16px solid var(--ink); border-top: 9px solid transparent; border-bottom: 9px solid transparent;
+}
+
+.lcd {
+  background: var(--lcd); color: var(--lcd-ink); border-radius: 12px; padding: 10px 16px;
+  font-weight: 700; font-size: 40px; line-height: 1.1; white-space: nowrap; letter-spacing: 0.02em;
+}
+.lcd.small { font-size: 32px; padding: 8px 16px; }
+.durtext { font-size: 36px; font-weight: 700; line-height: 1.15; text-align: center; }
+
+.entry { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; font-size: 38px; font-weight: 700; }
+.entry .sep { padding: 0 2px; }
+.entry .u { font-size: 26px; color: var(--muted); margin-right: 6px; }
+.seg {
+  font: inherit; font-weight: 700; width: 1.7em; height: 1.5em; padding: 0; text-align: center;
+  color: var(--ink); background: var(--field);
+  border: 3px solid var(--accent); border-radius: 10px;
+  -webkit-appearance: none; appearance: none;
+}
+.seg.one { width: 1.25em; }
+.seg:focus { outline: 4px solid var(--focus); outline-offset: 2px; }
+.seg.ok { border-color: var(--ok); background: var(--ok-bg); }
+.seg.bad { border-color: var(--bad); background: var(--bad-bg); }
+
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.big {
+  font: 700 26px var(--font); min-height: 68px; padding: 0 36px;
+  border-radius: 16px; border: 0; background: var(--accent); color: var(--accent-ink); cursor: pointer;
+}
+.msg { margin: 0; font-size: 24px; font-weight: 700; padding: 12px 18px; border-radius: 12px; }
+.msg:empty { display: none; }
+.msg.ok { background: var(--ok-bg); color: var(--ok); }
+.msg.bad { background: var(--bad-bg); color: var(--bad); }
+.msg.warn { background: var(--head); color: var(--ink); }
+
+.solution { background: var(--head); border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
+.solution h2 { margin: 0; font-size: 26px; }
+.solution h3 { margin: 0; font-size: 22px; }
+.answerline { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; font-size: 24px; font-weight: 700; }
+.steps { margin: 0; padding-left: 28px; font-size: 22px; line-height: 1.55; display: flex; flex-direction: column; gap: 8px; }
+.steps li { padding-left: 4px; max-width: 62ch; }
+
+.end h2 { margin: 0; font-size: 34px; }
+.score { margin: 0; font-size: 44px; font-weight: 700; color: var(--accent); }
+.endtext { margin: 0; font-size: 24px; }
+
+@media (max-width: 899px) {
+  .table { display: flex; flex-direction: column; }
+  .colhead { display: none; }
+  .cell + .cell { border-left: 0; border-top: 2px solid var(--rule); }
+  .lab { display: block; }
+  .lcd { font-size: 48px; }
+  .lcd.small { font-size: 32px; }
+  .arrow { align-self: center; width: 3px; height: 30px; margin: 0 0 16px 0; }
+  .arrow::after {
+    left: 50%; top: 100%; transform: translateX(-50%);
+    border-left: 10px solid transparent; border-right: 10px solid transparent;
+    border-top: 16px solid var(--ink); border-bottom: 0;
+  }
+}
+@media (max-width: 480px) {
+  body { font-size: 18px; }
+  h1 { font-size: 28px; }
+  .card { padding: 16px; }
+  .prompt { font-size: 24px; }
+  .lcd { font-size: 40px; }
+  .entry { font-size: 34px; }
+  .durtext { font-size: 32px; }
+  .big { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; }
+}
+</style>
+
+<main class="app">
+  <header>
+    <h1>Zeitdauer</h1>
+    <div class="modes" role="group" aria-label="Übungsart">
+      <button type="button" id="m-hm" data-mode="hm" aria-pressed="true">Stunden und Minuten</button>
+      <button type="button" id="m-ms" data-mode="ms" aria-pressed="false">Minuten und Sekunden</button>
+      <button type="button" id="m-mix" data-mode="mix" aria-pressed="false">Gemischt</button>
+    </div>
+  </header>
+
+  <div class="progress" id="progress"></div>
+
+  <section class="card" id="task">
+    <p class="count" id="count"></p>
+    <p class="prompt" id="prompt"></p>
+    <div class="table">
+      <div class="colhead">Zeitpunkt</div>
+      <div class="colhead">Zeitdauer</div>
+      <div class="colhead">Zeitpunkt</div>
+      <div class="cell" id="c1"></div>
+      <div class="cell" id="c2"></div>
+      <div class="cell" id="c3"></div>
+    </div>
+    <div class="actions">
+      <button type="button" class="big" id="main">Prüfen</button>
+      <p class="msg" id="msg" role="status"></p>
+    </div>
+    <div class="solution" id="solution" hidden></div>
+  </section>
+
+  <section class="card end" id="end" hidden>
+    <h2>Geschafft!</h2>
+    <p class="score" id="score"></p>
+    <p class="endtext" id="endtext"></p>
+    <div class="actions"><button type="button" class="big" id="again">Nochmal üben</button></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var N = 10;
+  var U = {
+    hm: { big: 'h', small: 'min', bigW: 'Stunden', smallW: 'Minuten', full: 'vollen Stunde' },
+    ms: { big: 'min', small: 's', bigW: 'Minuten', smallW: 'Sekunden', full: 'vollen Minute' }
+  };
+  var $ = function (s) { return document.querySelector(s); };
+  var rnd = function (a, b) { return a + Math.floor(Math.random() * (b - a + 1)); };
+  var shuffle = function (a) {
+    for (var i = a.length - 1; i > 0; i--) { var j = rnd(0, i); var t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  };
+  var p2 = function (n) { return String(n).padStart(2, '0'); };
+  var el = function (tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  };
+
+  var tasks = [], idx = 0, results = [], phase = 'answer', mode = 'hm', fields = [];
+
+  /* Formatierung: hm = Minuten seit Mitternacht, ms = Sekunden seit Mitternacht */
+  function fT(t, u) {
+    if (u === 'hm') return p2(Math.floor(t / 60)) + ':' + p2(t % 60);
+    return p2(Math.floor(t / 3600)) + ':' + p2(Math.floor((t % 3600) / 60)) + ':' + p2(t % 60);
+  }
+  function fD(d, u) { return Math.floor(d / 60) + ' ' + U[u].big + ' ' + (d % 60) + ' ' + U[u].small; }
+
+  /* Aufgaben erzeugen */
+  function makeTask(u, kind) {
+    var s, d;
+    if (u === 'hm') {
+      s = rnd(72, 204) * 5;
+      d = rnd(1, 4) * 60 + rnd(1, 59);
+    } else {
+      s = rnd(6, 17) * 3600 + rnd(0, 59) * 60 + (Math.random() < 0.5 ? 0 : rnd(1, 11) * 5);
+      d = rnd(1, 5) * 60 + rnd(1, 59);
+    }
+    return { u: u, kind: kind, s: s, d: d, e: s + d };
+  }
+  function buildTasks(m) {
+    var units;
+    if (m === 'hm') units = Array(N).fill('hm');
+    else if (m === 'ms') units = Array(N).fill('ms');
+    else units = shuffle(['hm', 'hm', 'hm', 'hm', 'hm', 'hm', 'ms', 'ms', 'ms', 'ms']);
+    var kinds = [];
+    while (kinds.length < N) kinds = kinds.concat(shuffle(['end', 'start', 'dur']));
+    return units.map(function (u, i) { return makeTask(u, kinds[i]); });
+  }
+
+  /* Erklärungen */
+  function fwd(x, sm, u) {
+    var X = U[u], rest = x % 60;
+    if (rest + sm > 60) {
+      var toFull = 60 - rest, full = x + toFull, remain = sm - toFull, res = full + remain;
+      return 'Bis zur nächsten ' + X.full + ' (' + fT(full, u) + ') sind es ' + toFull + ' ' + X.small +
+        '. Es bleiben noch ' + remain + ' ' + X.small + ': ' + fT(full, u) + ' + ' + remain + ' ' + X.small + ' = ' + fT(res, u) + '.';
+    }
+    return fT(x, u) + ' + ' + sm + ' ' + X.small + ' = ' + fT(x + sm, u) + '.';
+  }
+  function back(x, sm, u) {
+    var X = U[u], rest = x % 60, res = x - sm;
+    if (rest >= sm) return fT(x, u) + ' − ' + sm + ' ' + X.small + ' = ' + fT(res, u) + '.';
+    if (rest === 0) {
+      return 'Von ' + fT(x, u) + ' gehst du ' + sm + ' ' + X.small + ' zurück. Das ergibt ' + fT(res, u) +
+        ', denn 60 − ' + sm + ' = ' + (60 - sm) + '.';
+    }
+    var full = x - rest, remain = sm - rest;
+    return 'Von ' + fT(x, u) + ' geht es ' + rest + ' ' + X.small + ' zurück bis ' + fT(full, u) +
+      '. Es bleiben noch ' + remain + ' ' + X.small + ': ' + fT(full, u) + ' − ' + remain + ' ' + X.small + ' = ' + fT(res, u) + '.';
+  }
+  function explain(t) {
+    var u = t.u, X = U[u], h = Math.floor(t.d / 60), m = t.d % 60, steps = [], x;
+    if (t.kind === 'end') {
+      x = t.s + h * 60;
+      steps.push('Rechne zuerst mit den ' + X.bigW + ': ' + fT(t.s, u) + ' + ' + h + ' ' + X.big + ' = ' + fT(x, u) + '.');
+      steps.push('Rechne dann mit den ' + X.smallW + '. ' + fwd(x, m, u));
+      steps.push('Der fehlende Zeitpunkt (rechts) ist ' + fT(t.e, u) + '.');
+      return { answer: fT(t.e, u), steps: steps };
+    }
+    if (t.kind === 'start') {
+      x = t.e - h * 60;
+      steps.push('Gehe zuerst die ' + X.bigW + ' zurück: ' + fT(t.e, u) + ' − ' + h + ' ' + X.big + ' = ' + fT(x, u) + '.');
+      steps.push('Gehe dann die ' + X.smallW + ' zurück. ' + back(x, m, u));
+      steps.push('Der fehlende Zeitpunkt (links) ist ' + fT(t.s, u) + '.');
+      return { answer: fT(t.s, u), steps: steps };
+    }
+    x = t.s + h * 60;
+    steps.push('Zähle zuerst die ' + X.bigW + ': Von ' + fT(t.s, u) + ' bis ' + fT(x, u) + ' sind es ' + h + ' ' + X.big + '.');
+    steps.push('Zähle dann die ' + X.smallW + ': Von ' + fT(x, u) + ' bis ' + fT(t.e, u) + ' sind es ' + m + ' ' + X.small + '.');
+    steps.push('Zusammen sind das ' + fD(t.d, u) + '.');
+    return { answer: fD(t.d, u), steps: steps };
+  }
+
+  /* Eingabefelder */
+  function seg(len, label) {
+    var i = document.createElement('input');
+    i.type = 'text';
+    i.inputMode = 'numeric';
+    i.setAttribute('pattern', '[0-9]*');
+    i.maxLength = len;
+    i.autocomplete = 'off';
+    i.setAttribute('autocapitalize', 'off');
+    i.setAttribute('autocorrect', 'off');
+    i.setAttribute('enterkeyhint', 'done');
+    i.spellcheck = false;
+    i.setAttribute('aria-label', label);
+    i.id = 'f' + fields.length;
+    i.className = 'seg' + (len === 1 ? ' one' : '');
+    i.addEventListener('input', function () {
+      i.value = i.value.replace(/\D/g, '').slice(0, len);
+      if (i.value.length === len) {
+        var k = fields.indexOf(i);
+        if (fields[k + 1]) fields[k + 1].focus();
+      }
+    });
+    i.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (phase === 'answer') check();
+      } else if (e.key === 'Backspace' && i.value === '') {
+        var k = fields.indexOf(i);
+        if (fields[k - 1]) { e.preventDefault(); fields[k - 1].focus(); }
+      }
+    });
+    i.addEventListener('focus', function () { setTimeout(function () { try { i.select(); } catch (err) {} }, 0); });
+    fields.push(i);
+    return i;
+  }
+  function timeEntry(u) {
+    var w = el('div', 'entry');
+    (u === 'hm' ? ['Stunden', 'Minuten'] : ['Stunden', 'Minuten', 'Sekunden']).forEach(function (n, k) {
+      if (k) w.append(el('span', 'sep', ':'));
+      w.append(seg(2, n));
+    });
+    return w;
+  }
+  function durEntry(u) {
+    var w = el('div', 'entry'), X = U[u];
+    w.append(seg(1, X.bigW), el('span', 'u', X.big), seg(2, X.smallW), el('span', 'u', X.small));
+    return w;
+  }
+
+  /* Anzeige */
+  function updateProgress() {
+    var box = $('#progress');
+    box.replaceChildren();
+    for (var i = 0; i < N; i++) {
+      var d = el('div', 'dot');
+      if (results[i] === true) { d.classList.add('ok'); d.textContent = '✓'; d.setAttribute('aria-label', 'Aufgabe ' + (i + 1) + ' richtig'); }
+      else if (results[i] === false) { d.classList.add('bad'); d.textContent = '✕'; d.setAttribute('aria-label', 'Aufgabe ' + (i + 1) + ' falsch'); }
+      else {
+        d.textContent = String(i + 1);
+        if (i === idx && !$('#task').hidden) { d.classList.add('cur'); d.setAttribute('aria-label', 'Aufgabe ' + (i + 1) + ', jetzt'); }
+        else d.setAttribute('aria-label', 'Aufgabe ' + (i + 1) + ', offen');
+      }
+      box.append(d);
+    }
+  }
+  function setMsg(kind, text) {
+    var m = $('#msg');
+    m.className = 'msg' + (kind ? ' ' + kind : '');
+    m.textContent = text || '';
+  }
+  function render() {
+    var t = tasks[idx];
+    phase = 'answer';
+    fields = [];
+    $('#end').hidden = true;
+    $('#task').hidden = false;
+    $('#count').textContent = 'Aufgabe ' + (idx + 1) + ' von ' + N;
+    $('#prompt').textContent = t.kind === 'dur' ? 'Berechne die fehlende Zeitdauer.' : 'Berechne den fehlenden Zeitpunkt.';
+
+    var first = t.kind === 'start' ? timeEntry(t.u) : el('div', 'lcd', fT(t.s, t.u));
+    var mid = t.kind === 'dur' ? durEntry(t.u) : el('div', 'durtext', fD(t.d, t.u));
+    var last = t.kind === 'end' ? timeEntry(t.u) : el('div', 'lcd', fT(t.e, t.u));
+    var arrow = el('div', 'arrow');
+    arrow.setAttribute('aria-hidden', 'true');
+
+    $('#c1').replaceChildren(el('div', 'lab', 'Zeitpunkt'), first);
+    $('#c2').replaceChildren(el('div', 'lab', 'Zeitdauer'), arrow, mid);
+    $('#c3').replaceChildren(el('div', 'lab', 'Zeitpunkt'), last);
+
+    setMsg('', '');
+    $('#solution').hidden = true;
+    $('#solution').replaceChildren();
+    $('#main').textContent = 'Prüfen';
+    updateProgress();
+    if (fields[0]) fields[0].focus({ preventScroll: true });
+  }
+
+  function valueOf(n, u) {
+    if (u === 'hm') return (n[0] <= 23 && n[1] <= 59) ? n[0] * 60 + n[1] : -1;
+    return (n[0] <= 23 && n[1] <= 59 && n[2] <= 59) ? n[0] * 3600 + n[1] * 60 + n[2] : -1;
+  }
+
+  function check() {
+    var t = tasks[idx], X = U[t.u];
+    var vals = fields.map(function (f) { return f.value.trim(); });
+    var empty = vals.findIndex(function (v) { return v === ''; });
+    if (empty >= 0) {
+      setMsg('warn', 'Fülle zuerst alle Felder aus.');
+      fields[empty].focus();
+      return;
+    }
+    var n = vals.map(Number), ok = false;
+    if (t.kind === 'dur') {
+      var total = n[0] * 60 + n[1];
+      if (total === t.d && n[1] >= 60) {
+        setMsg('warn', 'Richtig gerechnet! Schreibe es aber mit weniger als 60 ' + X.small + ': 60 ' + X.small + ' sind 1 ' + X.big + '.');
+        fields[1].focus();
+        return;
+      }
+      ok = total === t.d;
+    } else {
+      ok = valueOf(n, t.u) === (t.kind === 'end' ? t.e : t.s);
+    }
+    results[idx] = ok;
+    phase = 'done';
+    fields.forEach(function (f) {
+      f.readOnly = true;
+      f.tabIndex = -1;
+      f.classList.add(ok ? 'ok' : 'bad');
+    });
+    if (ok) {
+      setMsg('ok', ['Richtig! Gut gerechnet.', 'Stimmt! Super gemacht.', 'Richtig! Das war genau.'][rnd(0, 2)]);
+    } else {
+      setMsg('bad', 'Das stimmt noch nicht. Schau dir die Lösung an.');
+      showSolution(t);
+    }
+    $('#main').textContent = idx === N - 1 ? 'Ergebnis ansehen' : 'Nächste Aufgabe';
+    $('#main').focus({ preventScroll: true });
+    updateProgress();
+  }
+
+  function showSolution(t) {
+    var ex = explain(t), box = $('#solution');
+    var line = el('div', 'answerline');
+    line.append(el('span', null, 'Richtig ist:'), el('span', 'lcd small', ex.answer));
+    var ol = el('ol', 'steps');
+    ex.steps.forEach(function (s) { ol.append(el('li', null, s)); });
+    box.replaceChildren(el('h2', null, 'Lösung'), line, el('h3', null, 'So rechnest du:'), ol);
+    box.hidden = false;
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    try { box.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' }); } catch (e) {}
+  }
+
+  function next() {
+    idx++;
+    if (idx >= N) showEnd(); else render();
+  }
+  function showEnd() {
+    var score = results.filter(Boolean).length;
+    $('#task').hidden = true;
+    $('#end').hidden = false;
+    $('#score').textContent = score + ' von ' + N + ' richtig';
+    $('#endtext').textContent =
+      score >= 9 ? 'Ausgezeichnet! Du berechnest Zeitdauern sehr sicher.' :
+      score >= 7 ? 'Sehr gut gemacht!' :
+      score >= 5 ? 'Gut gemacht. Mit etwas Übung wird es noch besser.' :
+      'Übe gleich nochmal und lies die Erklärungen genau durch.';
+    updateProgress();
+    $('#again').focus();
+  }
+
+  function start() {
+    tasks = buildTasks(mode);
+    idx = 0;
+    results = [];
+    render();
+  }
+
+  $('#main').addEventListener('click', function () {
+    if (phase === 'answer') check(); else next();
+  });
+  $('#again').addEventListener('click', start);
+  document.querySelectorAll('.modes button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      mode = b.getAttribute('data-mode');
+      document.querySelectorAll('.modes button').forEach(function (o) {
+        o.setAttribute('aria-pressed', o === b ? 'true' : 'false');
+      });
+      start();
+    });
+  });
+
+  start();
+})();
+</script>
+
+</body></html>
